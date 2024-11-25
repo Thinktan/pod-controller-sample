@@ -4,3 +4,6 @@ docker build -t thinktan/pod-controller:v5 .
 
 docker login
 docker push thinktan/pod-controller:v5
+
+修改pod-controller.yaml镜像地址
+kubectl apply -f pod-controller.yaml

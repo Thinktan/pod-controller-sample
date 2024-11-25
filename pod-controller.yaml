@@ -44,5 +44,5 @@ spec:
       serviceAccountName: pod-controller-sa
       containers:
         - name: pod-controller
-          image: thinktan/pod-controller:v4
+          image: thinktan/pod-controller:v5
           imagePullPolicy: Always
