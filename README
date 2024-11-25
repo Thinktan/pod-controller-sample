@@ -1,0 +1,6 @@
+docker buildx create --use
+docker buildx inspect --bootstrap
+docker build -t thinktan/pod-controller:v5 .
+
+docker login
+docker push thinktan/pod-controller:v5

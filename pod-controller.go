@@ -7,7 +7,7 @@ import (
 	"k8s.io/client-go/rest"
 	"time"
 
-	//v1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -47,6 +47,8 @@ func main() {
 	// Create workqueue
 	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Pods")
 
+	indexer := podInformer.GetIndexer()
+
 	// Add event handlers to the Informer
 	podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -55,6 +57,8 @@ func main() {
 				fmt.Printf("Pod added: %s\n", key)
 				queue.Add(key)
 			}
+
+			indexer.Add(obj)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(newObj)
@@ -62,6 +66,8 @@ func main() {
 				fmt.Printf("Pod updated: %s\n", key)
 				queue.Add(key)
 			}
+
+			indexer.Update(newObj)
 		},
 		DeleteFunc: func(obj interface{}) {
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
@@ -69,6 +75,8 @@ func main() {
 				fmt.Printf("Pod deleted: %s\n", key)
 				queue.Add(key)
 			}
+
+			indexer.Delete(obj)
 		},
 	})
 
@@ -85,7 +93,7 @@ func main() {
 
 	// Start the worker
 	go wait.Until(func() {
-		for processNextItem(queue) {
+		for processNextItem(queue, indexer) {
 		}
 	}, time.Second, stopCh)
 
@@ -93,7 +101,7 @@ func main() {
 	<-stopCh
 }
 
-func processNextItem(queue workqueue.RateLimitingInterface) bool {
+func processNextItem(queue workqueue.RateLimitingInterface, indexer cache.Indexer) bool {
 	key, shutdown := queue.Get()
 	if shutdown {
 		return false
@@ -101,7 +109,7 @@ func processNextItem(queue workqueue.RateLimitingInterface) bool {
 	defer queue.Done(key)
 
 	// Process the key (for demo purposes, just print it)
-	err := handleEvent(key.(string))
+	err := handleEvent(key.(string), indexer)
 	if err != nil {
 		queue.AddRateLimited(key)
 	} else {
@@ -110,7 +118,21 @@ func processNextItem(queue workqueue.RateLimitingInterface) bool {
 	return true
 }
 
-func handleEvent(key string) error {
-	fmt.Printf("Processing key: %s\n", key)
+func handleEvent(key string, indexer cache.Indexer) error {
+	// Use the Indexer to fetch the object by key
+	obj, exists, err := indexer.GetByKey(key)
+	if err != nil {
+		fmt.Printf("Error fetching object with key %s from indexer: %v\n", key, err)
+		return err
+	}
+
+	if !exists {
+		fmt.Printf("Pod %s no longer exists in the indexer\n", key)
+		return nil
+	}
+
+	// Convert the object to a Pod and print its name
+	pod := obj.(*v1.Pod)
+	fmt.Printf("Processing Pod: %s/%s\n", pod.Namespace, pod.Name)
 	return nil
 }
